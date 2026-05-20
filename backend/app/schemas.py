@@ -2,7 +2,7 @@ import json
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class Token(BaseModel):
@@ -108,7 +108,7 @@ class UpcomingVisitOut(BaseModel):
     consultation_id: int
     patient_id: int
     patient_name: str
-    next_visit_date: date
+    next_visit_date: datetime
 
 
 class DoctorSummaryOut(BaseModel):
@@ -128,6 +128,9 @@ class DiagnosisItem(BaseModel):
     disease: str
     probability: float
     symptom_influences: list[SymptomInfluenceOut] = []
+    icd10_code: str | None = None
+    icd10_title_ru: str | None = None
+    icd10_title_en: str | None = None
 
 
 class DiagnoseRequest(BaseModel):
@@ -146,12 +149,20 @@ class DiagnoseResponse(BaseModel):
 class ConsultationCreate(BaseModel):
     patient_id: int
     visit_at: datetime | None = None
-    next_visit_date: date | None = None
+    next_visit_date: datetime | None = None
     notes: str | None = None
     symptom_keys: list[str]
     clarifications: list[dict] | None = None
     diagnoses: dict
     diagnosis_feedback: bool | None = None
+
+    @model_validator(mode="after")
+    def _require_doctor_diagnosis_when_ai_wrong(self):
+        if self.diagnosis_feedback is False:
+            raw = self.diagnoses.get("doctor_diagnosis") if isinstance(self.diagnoses, dict) else None
+            if not isinstance(raw, str) or not raw.strip():
+                raise ValueError("Укажите диагноз врача из списка, если ИИ ошибся")
+        return self
 
 
 class ConsultationOut(BaseModel):
@@ -159,7 +170,7 @@ class ConsultationOut(BaseModel):
     patient_id: int
     doctor_id: int
     visit_at: datetime
-    next_visit_date: date | None
+    next_visit_date: datetime | None
     notes: str | None
     symptoms_json: list | None
     clarifications_json: list | dict | None

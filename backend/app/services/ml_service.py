@@ -61,6 +61,18 @@ class MLService:
                 break
         return out[:limit]
 
+    def disease_suggestions(self, q: str, limit: int = 20) -> list[dict]:
+        if self._model is None:
+            self.load()
+        q = q.strip().lower()
+        out: list[dict] = []
+        for name in sorted(self._disease_names, key=str.lower):
+            if not q or q in name.lower():
+                out.append({"name": name})
+            if len(out) >= limit:
+                break
+        return out[:limit]
+
     def symptom_labels_map(self) -> dict[str, str]:
         """Ключ симптома → подпись (RU) для отображения в UI."""
         if self._model is None:

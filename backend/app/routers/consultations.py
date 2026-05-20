@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -11,6 +12,8 @@ from app.database import get_db
 from app.deps import DoctorUser, get_current_user
 from app.models import Consultation, Patient, User, UserRole
 from app.schemas import CalendarDay, ConsultationCreate, ConsultationFeedback, ConsultationOut
+from app.services.consultation_pdf import build_consultation_pdf
+from app.services.icd10_service import icd10_service
 
 router = APIRouter(prefix="/consultations", tags=["consultations"])
 _logger = logging.getLogger(__name__)
@@ -56,15 +59,20 @@ def create_consultation(
 ):
     _ensure_patient_access(db, user, body.patient_id)
     visit = _to_naive_utc(body.visit_at) if body.visit_at else _to_naive_utc(datetime.now(timezone.utc))
+    next_visit = (
+        _to_naive_utc(body.next_visit_date) if body.next_visit_date is not None else None
+    )
+    icd10_service.load()
+    diagnoses_json = icd10_service.enrich_diagnoses_json(body.diagnoses)
     c = Consultation(
         patient_id=body.patient_id,
         doctor_id=user.id,
         visit_at=visit,
-        next_visit_date=body.next_visit_date,
+        next_visit_date=next_visit,
         notes=body.notes,
         symptoms_json=body.symptom_keys,
         clarifications_json=body.clarifications,
-        diagnoses_json=body.diagnoses,
+        diagnoses_json=diagnoses_json,
         diagnosis_feedback=body.diagnosis_feedback,
     )
     db.add(c)
@@ -89,14 +97,48 @@ def list_consultations(
     return q.order_by(Consultation.visit_at.desc()).all()
 
 
-@router.get("/{consultation_id}", response_model=ConsultationOut)
-def get_consultation(consultation_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def _get_consultation_or_404(
+    consultation_id: int, user: User, db: Session
+) -> Consultation:
     c = db.query(Consultation).filter(Consultation.id == consultation_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="Консультация не найдена")
     if user.role == UserRole.doctor and c.doctor_id != user.id:
         raise HTTPException(status_code=403, detail="Нет доступа")
     return c
+
+
+@router.get("/{consultation_id}", response_model=ConsultationOut)
+def get_consultation(consultation_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return _get_consultation_or_404(consultation_id, user, db)
+
+
+@router.get("/{consultation_id}/pdf")
+def consultation_pdf(
+    consultation_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    c = _get_consultation_or_404(consultation_id, user, db)
+    patient = db.query(Patient).filter(Patient.id == c.patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Пациент не найден")
+    if user.role == UserRole.doctor:
+        _ensure_patient_access(db, user, patient.id)
+    doctor = db.query(User).filter(User.id == c.doctor_id).first()
+    if not doctor:
+        raise HTTPException(status_code=404, detail="Врач не найден")
+    try:
+        pdf_bytes = build_consultation_pdf(c, patient, doctor)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    visit = c.visit_at.strftime("%Y-%m-%d")
+    filename = f"consultation-{c.id}-{visit}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.patch("/{consultation_id}/feedback", response_model=ConsultationOut)
@@ -137,7 +179,7 @@ def calendar(
         .filter(Consultation.doctor_id == user.id)
         .filter(
             or_(
-                Consultation.next_visit_date.between(start_d, end_d),
+                func.date(Consultation.next_visit_date).between(start_d, end_d),
                 func.date(Consultation.visit_at).between(start_d, end_d),
             )
         )
@@ -151,12 +193,14 @@ def calendar(
         by_day[day] = {}
 
     for c in rows:
-        if c.next_visit_date and start_d <= c.next_visit_date <= end_d:
-            by_day[c.next_visit_date][c.id] = c
-        else:
-            vd = c.visit_at.date() if c.visit_at.tzinfo else c.visit_at.date()
-            if start_d <= vd <= end_d:
-                by_day[vd][c.id] = c
+        if c.next_visit_date:
+            nv_day = c.next_visit_date.date()
+            if start_d <= nv_day <= end_d:
+                by_day[nv_day][c.id] = c
+                continue
+        vd = c.visit_at.date() if c.visit_at.tzinfo else c.visit_at.date()
+        if start_d <= vd <= end_d:
+            by_day[vd][c.id] = c
 
     out: list[CalendarDay] = []
     for day in sorted(by_day.keys()):

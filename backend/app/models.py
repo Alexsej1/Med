@@ -64,7 +64,7 @@ class Consultation(Base):
     patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
     doctor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     visit_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    next_visit_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    next_visit_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     symptoms_json: Mapped[list | None] = mapped_column(JSON, nullable=True)
     clarifications_json: Mapped[list | dict | None] = mapped_column(JSON, nullable=True)

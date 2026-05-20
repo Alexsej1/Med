@@ -1,7 +1,8 @@
+import re
 from datetime import date as DateType
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func
+from sqlalchemy import String, and_, cast, func, or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -24,6 +25,81 @@ def _strip_or_none(v: str | None) -> str | None:
     s = v.strip()
     return s or None
 
+
+def _normalize_search_tokens(q: str) -> list[str]:
+    """Разбивает запрос на слова; лишние пробелы убираются."""
+    return [t for t in re.split(r"\s+", q.strip().lower()) if t]
+
+
+def _digits_only(value: str) -> str:
+    return re.sub(r"\D", "", value)
+
+
+def _phone_digits_column(column):
+    """Оставляет в номере телефона только цифры (для поиска без форматирования)."""
+    expr = func.coalesce(column, "")
+    for ch in (" ", "-", "(", ")", "+"):
+        expr = func.replace(expr, ch, "")
+    return expr
+
+
+def _apply_patient_search(query, q: str):
+    """
+    Поиск по ФИО (все слова запроса), телефону, email, полису, экстренному контакту.
+    Слова объединяются через AND — «Иван Петров» найдёт и «Петров Иван».
+    """
+    raw = q.strip()
+    if not raw:
+        return query
+
+    # Проверяем, является ли запрос преимущественно цифровым (телефон/полис)
+    digits = _digits_only(raw)
+    compact = re.sub(r"\s+", "", raw)
+    
+    # Если запрос состоит в основном из цифр (>= 50% символов - цифры) и содержит минимум 5 цифр
+    if digits and len(digits) >= 5 and len(digits) / max(len(compact), 1) >= 0.5:
+        digit_term = f"%{digits}%"
+        return query.filter(
+            or_(
+                _phone_digits_column(Patient.phone).like(digit_term),
+                _phone_digits_column(Patient.emergency_contact_phone).like(digit_term),
+                cast(Patient.policy_number, String).like(digit_term),
+            )
+        )
+
+    # Текстовый поиск
+    tokens = _normalize_search_tokens(raw)
+    if not tokens:
+        return query
+
+    # Создаем отдельные условия для разных групп полей
+    text_conditions = []
+    
+    # Поиск по имени (разбиваем на слова и ищем каждое)
+    name_tokens = []
+    for token in tokens:
+        name_tokens.append(func.lower(Patient.name).like(f"%{token}%"))
+    
+    # Поиск по email
+    email_tokens = []
+    for token in tokens:
+        email_tokens.append(func.lower(func.coalesce(Patient.email, "")).like(f"%{token}%"))
+    
+    # Поиск по имени экстренного контакта
+    contact_tokens = []
+    for token in tokens:
+        contact_tokens.append(func.lower(func.coalesce(Patient.emergency_contact_name, "")).like(f"%{token}%"))
+    
+    # Объединяем: ищем совпадение всех токенов в имени ИЛИ в email ИЛИ в контакте
+    query = query.filter(
+        or_(
+            and_(*name_tokens),      # Все токены в имени
+            and_(*email_tokens),     # Все токены в email
+            and_(*contact_tokens),   # Все токены в имени контакта
+        )
+    )
+    
+    return query
 
 @router.post("", response_model=PatientOut)
 def create_patient(body: PatientCreate, user: DoctorUser, db: Session = Depends(get_db)):
@@ -58,7 +134,11 @@ def list_patients(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     doctor_id: int | None = Query(None),
-    q: str | None = Query(None, max_length=128, description="Поиск по имени (без учёта регистра)"),
+    q: str | None = Query(
+        None,
+        max_length=128,
+        description="Поиск по ФИО, телефону, email, полису",
+    ),
 ):
     if user.role == UserRole.admin:
         query = db.query(Patient)
@@ -68,10 +148,9 @@ def list_patients(
         query = db.query(Patient).filter(Patient.doctor_id == user.id)
 
     if q and q.strip():
-        term = f"%{q.strip().lower()}%"
-        query = query.filter(func.lower(Patient.name).like(term))
+        query = _apply_patient_search(query, q)
 
-    return query.order_by(Patient.created_at.desc()).all()
+    return query.order_by(Patient.name.asc(), Patient.created_at.desc()).all()
 
 
 @router.get("/{patient_id}", response_model=PatientOut)

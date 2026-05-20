@@ -6,9 +6,9 @@ from sqlalchemy.orm import Session
 
 from app.auth_utils import hash_password
 from app.database import Base, SessionLocal, engine
-from app.db_migrate import run_patient_extended_columns
+from app.db_migrate import run_next_visit_datetime, run_patient_extended_columns
 from app.models import User, UserRole
-from app.routers import admin, auth, consultations, diagnose, doctor, patients, symptoms
+from app.routers import admin, auth, consultations, diagnose, diseases, doctor, icd10, patients, symptoms
 
 API_PREFIX = "/api"
 
@@ -16,6 +16,7 @@ API_PREFIX = "/api"
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     run_patient_extended_columns(engine)
+    run_next_visit_datetime(engine)
     db: Session = SessionLocal()
     try:
         if db.query(User).count() == 0:
@@ -49,7 +50,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="ВитаМед — медицинский центр", lifespan=lifespan)
+app = FastAPI(title="MedExpert — медицинский центр", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -67,6 +68,8 @@ api.include_router(consultations.router)
 api.include_router(consultations.router_cal)
 api.include_router(diagnose.router)
 api.include_router(symptoms.router)
+api.include_router(diseases.router)
+api.include_router(icd10.router)
 api.include_router(admin.router)
 app.include_router(api)
 

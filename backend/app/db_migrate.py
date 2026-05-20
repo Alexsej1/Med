@@ -37,3 +37,25 @@ def run_patient_extended_columns(engine: Engine) -> None:
                 continue
             sql = _patient_column_sql(dialect, col, typ)
             conn.execute(text(sql))
+
+
+def run_next_visit_datetime(engine: Engine) -> None:
+    """SQLite хранит даты гибко; для MySQL приводим next_visit_date к DATETIME."""
+    if engine.dialect.name != "mysql":
+        return
+    insp = inspect(engine)
+    if "consultations" not in insp.get_table_names():
+        return
+    cols = {c["name"]: c for c in insp.get_columns("consultations")}
+    col = cols.get("next_visit_date")
+    if not col:
+        return
+    type_name = str(col.get("type", "")).upper()
+    if "DATETIME" in type_name:
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "ALTER TABLE consultations MODIFY COLUMN next_visit_date DATETIME NULL"
+            )
+        )

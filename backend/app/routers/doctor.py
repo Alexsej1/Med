@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -11,10 +11,16 @@ from app.schemas import DoctorSummaryOut, UpcomingVisitOut
 router = APIRouter(prefix="/doctor", tags=["doctor"])
 
 
+def _to_naive_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt
+    return dt.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 @router.get("/summary", response_model=DoctorSummaryOut)
 def doctor_summary(user: DoctorUser, db: Session = Depends(get_db)):
-    today = datetime.now(timezone.utc).date()
-    week_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    now = _to_naive_utc(datetime.now(timezone.utc))
+    week_ago = now - timedelta(days=7)
 
     patients_total = db.query(Patient).filter(Patient.doctor_id == user.id).count()
     consultations_total = db.query(Consultation).filter(Consultation.doctor_id == user.id).count()
@@ -30,7 +36,7 @@ def doctor_summary(user: DoctorUser, db: Session = Depends(get_db)):
         .filter(
             Consultation.doctor_id == user.id,
             Consultation.next_visit_date.isnot(None),
-            Consultation.next_visit_date >= today,
+            Consultation.next_visit_date >= now,
         )
         .order_by(Consultation.next_visit_date.asc(), Consultation.id.asc())
         .limit(12)
