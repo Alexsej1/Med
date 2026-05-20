@@ -1,4 +1,3 @@
-/** Поля создания / обновления карты пациента (синхронно с бэкендом). */
 export type PatientCreatePayload = {
   name: string;
   birth_date: string;

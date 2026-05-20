@@ -17,7 +17,9 @@ export function AdminConsultations() {
   const { token } = useAuth();
   const [rows, setRows] = useState<Consultation[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
-  const [doctors, setDoctors] = useState<{ id: number; username: string; full_name: string | null }[]>([]);
+  const [doctors, setDoctors] = useState<
+    { id: number; username: string; full_name: string | null }[]
+  >([]);
   const [patientId, setPatientId] = useState<number | "">("");
   const [doctorId, setDoctorId] = useState<number | "">("");
   const [notes, setNotes] = useState("");
@@ -39,7 +41,9 @@ export function AdminConsultations() {
   }, [token]);
 
   useEffect(() => {
-    void reload().catch((e) => setErr(e instanceof Error ? e.message : "Ошибка"));
+    void reload().catch((e) =>
+      setErr(e instanceof Error ? e.message : "Ошибка"),
+    );
   }, [reload]);
 
   async function onAdd(e: FormEvent) {
@@ -76,7 +80,8 @@ export function AdminConsultations() {
     }
   }
 
-  const patientName = (id: number) => patients.find((p) => p.id === id)?.name ?? `#${id}`;
+  const patientName = (id: number) =>
+    patients.find((p) => p.id === id)?.name ?? `#${id}`;
 
   return (
     <div className="page-stack">
@@ -86,7 +91,10 @@ export function AdminConsultations() {
         <form onSubmit={onAdd} className="row">
           <div className="field">
             <label className="field__label">Пациент</label>
-            <select value={patientId} onChange={(e) => setPatientId(Number(e.target.value))}>
+            <select
+              value={patientId}
+              onChange={(e) => setPatientId(Number(e.target.value))}
+            >
               {patients.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name} — {doctorDisplayName(p.doctor_id, doctors)}
@@ -96,7 +104,10 @@ export function AdminConsultations() {
           </div>
           <div className="field">
             <label className="field__label">Врач</label>
-            <select value={doctorId} onChange={(e) => setDoctorId(Number(e.target.value))}>
+            <select
+              value={doctorId}
+              onChange={(e) => setDoctorId(Number(e.target.value))}
+            >
               {doctors.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.full_name || d.username}
@@ -105,12 +116,20 @@ export function AdminConsultations() {
             </select>
           </div>
           <div className="field">
-            <label className="field__label">След. визит</label>
-            <input type="date" value={nextVisit} onChange={(e) => setNextVisit(e.target.value)} />
+            <label className="field__label">След. визит (дата и время)</label>
+            <input
+              type="datetime-local"
+              value={nextVisit}
+              onChange={(e) => setNextVisit(e.target.value)}
+            />
           </div>
           <div className="field" style={{ flex: "1 1 240px" }}>
             <label className="field__label">Комментарий</label>
-            <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Запись администратора" />
+            <input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Запись администратора"
+            />
           </div>
           <button className="btn" type="submit">
             Добавить
@@ -143,7 +162,11 @@ export function AdminConsultations() {
                 <td>{doctorDisplayName(c.doctor_id, doctors)}</td>
                 <td>{new Date(c.visit_at).toLocaleString("ru-RU")}</td>
                 <td>
-                  <button type="button" className="btn btn--danger" onClick={() => void onDelete(c.id)}>
+                  <button
+                    type="button"
+                    className="btn btn--danger"
+                    onClick={() => void onDelete(c.id)}
+                  >
                     Удалить
                   </button>
                 </td>

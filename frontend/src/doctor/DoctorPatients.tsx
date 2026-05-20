@@ -5,9 +5,9 @@ import { api } from "../api";
 import type { Patient } from "../types";
 
 const genderRu: Record<string, string> = {
-  male: "мужской",
-  female: "женский",
-  other: "другой",
+  male: "Мужской",
+  female: "Женский",
+  other: "Другой",
 };
 
 const emptyCreate = {
@@ -28,7 +28,8 @@ const emptyCreate = {
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  if (parts.length === 1 && parts[0].length >= 2) return parts[0].slice(0, 2).toUpperCase();
+  if (parts.length === 1 && parts[0].length >= 2)
+    return parts[0].slice(0, 2).toUpperCase();
   return (parts[0]?.[0] ?? "?").toUpperCase();
 }
 
@@ -40,24 +41,51 @@ export function DoctorPatients() {
   const [form, setForm] = useState(emptyCreate);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = "patient-create-modal-title";
 
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search.trim()), 350);
+    const trimmed = search.trim();
+    if (!trimmed) {
+      setDebouncedSearch("");
+      return;
+    }
+    const t = setTimeout(() => setDebouncedSearch(trimmed), 300);
     return () => clearTimeout(t);
   }, [search]);
 
   const load = useCallback(async () => {
     if (!token) return;
     setLoadErr(null);
+    setLoading(true);
     try {
-      setList(await api.patients(token, debouncedSearch ? { q: debouncedSearch } : undefined));
+      setList(
+        await api.patients(
+          token,
+          debouncedSearch ? { q: debouncedSearch } : undefined,
+        ),
+      );
     } catch (e) {
       setLoadErr(e instanceof Error ? e.message : "Ошибка");
+    } finally {
+      setLoading(false);
     }
   }, [token, debouncedSearch]);
+
+  const listSubtitle = loading
+    ? "Поиск…"
+    : debouncedSearch
+      ? list.length === 0
+        ? "По запросу ничего не найдено"
+        : `Найдено: ${list.length}`
+      : `${list.length} записей в картотеке`;
+
+  function clearSearch() {
+    setSearch("");
+    setDebouncedSearch("");
+  }
 
   useEffect(() => {
     void load();
@@ -68,7 +96,9 @@ export function DoctorPatients() {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const t = window.setTimeout(() => {
-      panelRef.current?.querySelector<HTMLInputElement>("input:not([type=hidden])")?.focus();
+      panelRef.current
+        ?.querySelector<HTMLInputElement>("input:not([type=hidden])")
+        ?.focus();
     }, 50);
     return () => {
       document.body.style.overflow = prev;
@@ -122,73 +152,228 @@ export function DoctorPatients() {
 
   return (
     <>
-      <div className="page-stack patients-page">
-        <header className="patients-page__header">
+      <div className="page-stack">
+        {/* Header */}
+        <div className="pts-header">
           <div>
-            <h1 className="page-title patients-page__title">Пациенты</h1>
-            <p className="patients-page__count">{list.length} в списке</p>
+            <h1 className="page-title" style={{ marginBottom: 4 }}>
+              Пациенты
+            </h1>
+            <p className="pts-header__sub">{listSubtitle}</p>
           </div>
-          <button type="button" className="btn patients-page__new" onClick={() => setModalOpen(true)}>
+          <button
+            type="button"
+            className="pts-add-btn"
+            onClick={() => setModalOpen(true)}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path
+                d="M8 1v14M1 8h14"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
             Новая карта
           </button>
-        </header>
-
-        <div className="card card--elevated patients-toolbar">
-          <div className="patients-toolbar__inner">
-            <div className="field field--lg patients-toolbar__search">
-              <label className="field__label" htmlFor="patient-search">
-                Поиск
-              </label>
-              <input
-                id="patient-search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Фамилия или имя…"
-                autoComplete="off"
-              />
-            </div>
-          </div>
-          {loadErr && <p className="error patients-toolbar__err">{loadErr}</p>}
         </div>
 
-        <div className="card card--elevated patient-list-card">
-          {list.length === 0 ? (
-            <div className="patient-list-empty">
-              <p className="patient-list-empty__title">{debouncedSearch ? "Ничего не найдено" : "Пациентов пока нет"}</p>
+        {/* Search bar */}
+        <div className="pts-search-row">
+          <div className="pts-search-wrap">
+            <svg
+              className="pts-search-icon"
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+            >
+              <circle
+                cx="6.5"
+                cy="6.5"
+                r="5"
+                stroke="#9095a8"
+                strokeWidth="1.5"
+              />
+              <path
+                d="M10.5 10.5L14 14"
+                stroke="#9095a8"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
+            <input
+              className="pts-search-input"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="ФИО, телефон, email или номер полиса"
+              autoComplete="off"
+              aria-label="Поиск пациентов"
+            />
+            {loading && (
+              <span className="pts-search-spinner" aria-hidden="true" />
+            )}
+            {search && !loading && (
+              <button
+                className="pts-search-clear"
+                onClick={clearSearch}
+                type="button"
+                aria-label="Очистить поиск"
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path
+                    d="M1 1l12 12M13 1L1 13"
+                    stroke="#9095a8"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>
+          {loadErr && (
+            <p className="error" style={{ margin: 0 }}>
+              {loadErr}
+            </p>
+          )}
+        </div>
+
+        {/* Patient list */}
+        <div
+          className={`pts-list-card${loading ? " pts-list-card--loading" : ""}`}
+        >
+          {list.length === 0 && !loading ? (
+            <div className="pts-empty">
+              <div className="pts-empty__icon">
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                  <rect
+                    x="4"
+                    y="8"
+                    width="24"
+                    height="18"
+                    rx="3"
+                    stroke="#d1d5e0"
+                    strokeWidth="1.5"
+                  />
+                  <path
+                    d="M10 14h12M10 19h8"
+                    stroke="#d1d5e0"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                  <circle
+                    cx="24"
+                    cy="8"
+                    r="5"
+                    fill="#f5f6fa"
+                    stroke="#d1d5e0"
+                    strokeWidth="1.5"
+                  />
+                  <path
+                    d="M22 8h4M24 6v4"
+                    stroke="#d1d5e0"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </div>
+              <p className="pts-empty__title">
+                {debouncedSearch ? "Ничего не найдено" : "Пациентов пока нет"}
+              </p>
+              <p className="pts-empty__sub">
+                {debouncedSearch
+                  ? "Попробуйте изменить запрос"
+                  : "Добавьте первую амбулаторную карту"}
+              </p>
               {!debouncedSearch && (
-                <button type="button" className="btn secondary" onClick={() => setModalOpen(true)}>
+                <button
+                  type="button"
+                  className="pts-add-btn"
+                  onClick={() => setModalOpen(true)}
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path
+                      d="M8 1v14M1 8h14"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                  </svg>
                   Новая карта
                 </button>
               )}
             </div>
-          ) : (
-            <ul className="patient-list" aria-label="Список пациентов">
-              {list.map((p) => (
-                <li key={p.id} className="patient-list__item">
-                  <div className="patient-list__avatar" aria-hidden>
-                    {initials(p.name)}
-                  </div>
-                  <div className="patient-list__body">
-                    <div className="patient-list__name">{p.name}</div>
-                    <div className="patient-list__phone muted">{p.phone ?? "телефон не указан"}</div>
-                  </div>
-                  <div className="patient-list__tags">
-                    <span className="patient-tag">{p.age} лет</span>
-                    <span className="patient-tag patient-tag--muted">{genderRu[p.gender] ?? p.gender}</span>
-                  </div>
-                  <Link className="btn btn--small secondary patient-list__link" to={`/doctor/patients/${p.id}`}>
-                    Карта
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
+          ) : list.length > 0 ? (
+            <table className="pts-table">
+              <thead>
+                <tr>
+                  <th>Пациент</th>
+                  <th>Телефон</th>
+                  <th>Возраст</th>
+                  <th>Пол</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((p) => (
+                  <tr key={p.id} className="pts-table__row">
+                    <td>
+                      <div className="pts-patient-cell">
+                        <div className="pts-avatar">{initials(p.name)}</div>
+                        <div>
+                          <div className="pts-patient-name">{p.name}</div>
+                          {p.email && (
+                            <div className="pts-patient-email">{p.email}</div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="pts-td-muted">{p.phone ?? "—"}</td>
+                    <td>
+                      <span className="pts-badge">{p.age} лет</span>
+                    </td>
+                    <td className="pts-td-muted">
+                      {genderRu[p.gender] ?? p.gender}
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      <Link
+                        to={`/doctor/patients/${p.id}`}
+                        className="pts-row-btn"
+                      >
+                        Открыть
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 14 14"
+                          fill="none"
+                        >
+                          <path
+                            d="M3 7h8M8 4l3 3-3 3"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : null}
         </div>
       </div>
 
+      {/* Modal */}
       {modalOpen && (
         <div className="modal" role="presentation">
-          <button type="button" className="modal__backdrop" aria-label="Закрыть" onClick={closeModal} />
+          <button
+            type="button"
+            className="modal__backdrop"
+            aria-label="Закрыть"
+            onClick={closeModal}
+          />
           <div
             ref={panelRef}
             className="modal__panel"
@@ -201,11 +386,26 @@ export function DoctorPatients() {
               <h2 id={titleId} className="modal__title">
                 Новая амбулаторная карта
               </h2>
-              <button type="button" className="modal__close" aria-label="Закрыть" onClick={closeModal}>
-                ×
+              <button
+                type="button"
+                className="modal__close"
+                aria-label="Закрыть"
+                onClick={closeModal}
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path
+                    d="M1 1l12 12M13 1L1 13"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
               </button>
             </div>
-            <form onSubmit={onCreate} className="patient-create-form modal__form">
+            <form
+              onSubmit={onCreate}
+              className="patient-create-form modal__form"
+            >
               <fieldset className="form-section">
                 <legend>Личные данные</legend>
                 <div className="form-grid form-grid--3">
@@ -213,7 +413,9 @@ export function DoctorPatients() {
                     <label className="field__label">ФИО полностью *</label>
                     <input
                       value={form.name}
-                      onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, name: e.target.value }))
+                      }
                       required
                       minLength={2}
                       maxLength={128}
@@ -225,16 +427,23 @@ export function DoctorPatients() {
                     <input
                       type="date"
                       value={form.birth_date}
-                      onChange={(e) => setForm((f) => ({ ...f, birth_date: e.target.value }))}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, birth_date: e.target.value }))
+                      }
                       required
                     />
                   </div>
                   <div className="field">
                     <label className="field__label">Пол *</label>
-                    <select value={form.gender} onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value }))}>
-                      <option value="male">мужской</option>
-                      <option value="female">женский</option>
-                      <option value="other">другой</option>
+                    <select
+                      value={form.gender}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, gender: e.target.value }))
+                      }
+                    >
+                      <option value="male">Мужской</option>
+                      <option value="female">Женский</option>
+                      <option value="other">Другой</option>
                     </select>
                   </div>
                 </div>
@@ -244,40 +453,49 @@ export function DoctorPatients() {
                 <legend>Контакты и документы</legend>
                 <div className="form-grid form-grid--2">
                   <div className="field">
-                    <label className="field__label">Телефон пациента *</label>
+                    <label className="field__label">Телефон *</label>
                     <input
                       value={form.phone}
-                      onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, phone: e.target.value }))
+                      }
                       required
                       minLength={10}
                       maxLength={64}
-                      placeholder="+375 …"
+                      placeholder="+7 (999) 000-00-00"
                     />
                   </div>
                   <div className="field">
-                    <label className="field__label">Электронная почта</label>
+                    <label className="field__label">Email</label>
                     <input
                       type="email"
                       value={form.email}
-                      onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, email: e.target.value }))
+                      }
                       maxLength={256}
-                      placeholder="необязательно"
                     />
                   </div>
                   <div className="field field--span2">
-                    <label className="field__label">Адрес регистрации / проживания</label>
+                    <label className="field__label">Адрес</label>
                     <input
                       value={form.address}
-                      onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, address: e.target.value }))
+                      }
                       maxLength={1024}
-                      placeholder="город, улица, дом, кв."
                     />
                   </div>
                   <div className="field field--span2">
-                    <label className="field__label">Номер полиса ОМС / ДМС</label>
+                    <label className="field__label">Номер полиса</label>
                     <input
                       value={form.policy_number}
-                      onChange={(e) => setForm((f) => ({ ...f, policy_number: e.target.value }))}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          policy_number: e.target.value,
+                        }))
+                      }
                       maxLength={128}
                     />
                   </div>
@@ -285,27 +503,38 @@ export function DoctorPatients() {
               </fieldset>
 
               <fieldset className="form-section">
-                <legend>Контакт для экстренной связи</legend>
+                <legend>Экстренный контакт</legend>
                 <div className="form-grid form-grid--2">
                   <div className="field">
-                    <label className="field__label">ФИО контактного лица *</label>
+                    <label className="field__label">
+                      ФИО контактного лица *
+                    </label>
                     <input
                       value={form.emergency_contact_name}
-                      onChange={(e) => setForm((f) => ({ ...f, emergency_contact_name: e.target.value }))}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          emergency_contact_name: e.target.value,
+                        }))
+                      }
                       required
                       minLength={2}
                       maxLength={256}
                     />
                   </div>
                   <div className="field">
-                    <label className="field__label">Телефон контактного лица *</label>
+                    <label className="field__label">Телефон *</label>
                     <input
                       value={form.emergency_contact_phone}
-                      onChange={(e) => setForm((f) => ({ ...f, emergency_contact_phone: e.target.value }))}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          emergency_contact_phone: e.target.value,
+                        }))
+                      }
                       required
                       minLength={10}
                       maxLength={64}
-                      placeholder="+375 …"
                     />
                   </div>
                 </div>
@@ -318,28 +547,37 @@ export function DoctorPatients() {
                   <textarea
                     rows={2}
                     value={form.allergies}
-                    onChange={(e) => setForm((f) => ({ ...f, allergies: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, allergies: e.target.value }))
+                    }
                     maxLength={4000}
-                    placeholder="Лекарственные, пищевые и др., или «нет известных»"
                   />
                 </div>
                 <div className="field">
-                  <label className="field__label">Хронические заболевания</label>
+                  <label className="field__label">
+                    Хронические заболевания
+                  </label>
                   <textarea
                     rows={2}
                     value={form.chronic_conditions}
-                    onChange={(e) => setForm((f) => ({ ...f, chronic_conditions: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        chronic_conditions: e.target.value,
+                      }))
+                    }
                     maxLength={4000}
                   />
                 </div>
                 <div className="field">
-                  <label className="field__label">Заметки по карте</label>
+                  <label className="field__label">Заметки</label>
                   <textarea
                     rows={2}
                     value={form.patient_notes}
-                    onChange={(e) => setForm((f) => ({ ...f, patient_notes: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, patient_notes: e.target.value }))
+                    }
                     maxLength={4000}
-                    placeholder="Важное для приёма: сопутствующие факторы, ограничения и т.д."
                   />
                 </div>
               </fieldset>
@@ -347,7 +585,11 @@ export function DoctorPatients() {
               {createErr && <p className="error modal__err">{createErr}</p>}
 
               <div className="modal__actions">
-                <button type="button" className="btn secondary" onClick={closeModal}>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={closeModal}
+                >
                   Отмена
                 </button>
                 <button className="btn" type="submit">

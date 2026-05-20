@@ -1,8 +1,12 @@
-import type { PatientCreatePayload, PatientUpdatePayload } from "./patientFormTypes";
+import type {
+  PatientCreatePayload,
+  PatientUpdatePayload,
+} from "./patientFormTypes";
 import type {
   CalendarDay,
   Consultation,
   DiagnoseResponse,
+  DiseaseSuggestion,
   DoctorSummary,
   Patient,
   User,
@@ -14,14 +18,20 @@ async function request<T>(
   path: string,
   opts: RequestInit & { token?: string | null } = {},
 ): Promise<T> {
-  const headers: Record<string, string> = { ...(opts.headers as Record<string, string>) };
+  const headers: Record<string, string> = {
+    ...(opts.headers as Record<string, string>),
+  };
   if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
   const res = await fetch(path, { ...opts, headers });
   if (!res.ok) {
     let detail = res.statusText;
     try {
       const body = await res.json();
-      if (body?.detail) detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+      if (body?.detail)
+        detail =
+          typeof body.detail === "string"
+            ? body.detail
+            : JSON.stringify(body.detail);
     } catch {
       /* ignore */
     }
@@ -31,13 +41,40 @@ async function request<T>(
   return (await res.json()) as T;
 }
 
+export async function fetchConsultationPdf(
+  token: string,
+  id: number,
+): Promise<Blob> {
+  const res = await fetch(`/api/consultations/${id}/pdf`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const body = await res.json();
+      if (body?.detail)
+        detail =
+          typeof body.detail === "string"
+            ? body.detail
+            : JSON.stringify(body.detail);
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail);
+  }
+  return res.blob();
+}
+
 export const api = {
   login(username: string, password: string) {
-    return request<{ access_token: string; token_type: string }>("/api/auth/login", {
-      method: "POST",
-      headers: jsonHeaders,
-      body: JSON.stringify({ username, password }),
-    });
+    return request<{ access_token: string; token_type: string }>(
+      "/api/auth/login",
+      {
+        method: "POST",
+        headers: jsonHeaders,
+        body: JSON.stringify({ username, password }),
+      },
+    );
   },
   me(token: string) {
     return request<User>("/api/auth/me", { token });
@@ -75,6 +112,9 @@ export const api = {
   consultation(token: string, id: number) {
     return request<Consultation>(`/api/consultations/${id}`, { token });
   },
+  consultationPdf(token: string, id: number) {
+    return fetchConsultationPdf(token, id);
+  },
   createConsultation(
     token: string,
     body: {
@@ -108,7 +148,9 @@ export const api = {
     if (start) p.set("start", start);
     if (end) p.set("end", end);
     const q = p.toString();
-    return request<CalendarDay[]>(`/api/calendar${q ? `?${q}` : ""}`, { token });
+    return request<CalendarDay[]>(`/api/calendar${q ? `?${q}` : ""}`, {
+      token,
+    });
   },
   doctorSummary(token: string) {
     return request<DoctorSummary>("/api/doctor/summary", { token });
@@ -117,13 +159,25 @@ export const api = {
     return request<Record<string, string>>("/api/symptoms/labels", { token });
   },
   symptoms(token: string, q: string) {
-    return request<{ key: string; label: string }[]>(`/api/symptoms/autocomplete?q=${encodeURIComponent(q)}`, {
-      token,
-    });
+    return request<{ key: string; label: string }[]>(
+      `/api/symptoms/autocomplete?q=${encodeURIComponent(q)}`,
+      {
+        token,
+      },
+    );
+  },
+  diseases(token: string, q: string) {
+    return request<DiseaseSuggestion[]>(
+      `/api/diseases/autocomplete?q=${encodeURIComponent(q)}`,
+      { token },
+    );
   },
   diagnose(
     token: string,
-    body: { symptom_keys: string[]; clarifications?: { symptom_key: string; present: boolean }[] | null },
+    body: {
+      symptom_keys: string[];
+      clarifications?: { symptom_key: string; present: boolean }[] | null;
+    },
   ) {
     return request<DiagnoseResponse>("/api/diagnose", {
       method: "POST",
@@ -133,8 +187,24 @@ export const api = {
     });
   },
   adminDoctors(token: string) {
-    return request<{ id: number; username: string; full_name: string | null }[]>("/api/admin/doctors", {
+    return request<
+      { id: number; username: string; full_name: string | null; patients_count: number }[]
+    >("/api/admin/doctors", { token });
+  },
+  adminCreateDoctor(
+    token: string,
+    body: { username: string; password: string; full_name?: string | null },
+  ) {
+    return request<{
+      id: number;
+      username: string;
+      full_name: string | null;
+      patients_count: number;
+    }>("/api/admin/doctors", {
+      method: "POST",
       token,
+      headers: jsonHeaders,
+      body: JSON.stringify(body),
     });
   },
   adminCreateConsultation(
@@ -159,6 +229,9 @@ export const api = {
     });
   },
   adminDeleteConsultation(token: string, id: number) {
-    return request<{ ok: boolean }>(`/api/admin/consultations/${id}`, { method: "DELETE", token });
+    return request<{ ok: boolean }>(`/api/admin/consultations/${id}`, {
+      method: "DELETE",
+      token,
+    });
   },
 };

@@ -43,13 +43,31 @@ export type Consultation = {
 export type DiagnosisItem = {
   disease: string;
   probability: number;
-  symptom_influences: { symptom_key: string; symptom_label: string; weight: number }[];
+  symptom_influences: {
+    symptom_key: string;
+    symptom_label: string;
+    weight: number;
+  }[];
+  icd10_code?: string | null;
+  icd10_title_ru?: string | null;
+  icd10_title_en?: string | null;
+};
+
+export type DiseaseSuggestion = {
+  name: string;
+  icd10_code?: string;
+  icd10_title_ru?: string;
+  icd10_title_en?: string;
 };
 
 export type DiagnoseResponse = {
   predictions: DiagnosisItem[];
   needs_clarification: boolean;
-  clarifying_questions: { symptom_key: string; symptom_label: string; hint: string }[];
+  clarifying_questions: {
+    symptom_key: string;
+    symptom_label: string;
+    hint: string;
+  }[];
   max_probability: number;
 };
 

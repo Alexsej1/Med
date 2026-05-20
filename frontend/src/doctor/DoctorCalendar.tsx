@@ -12,6 +12,7 @@ import {
   parseISODateLocal,
   startOfMonth,
   toISODateLocal,
+  formatDateTimeRu,
 } from "./dateUtils";
 
 function dedupeById(consultations: Consultation[]): Consultation[] {
@@ -22,10 +23,14 @@ function dedupeById(consultations: Consultation[]): Consultation[] {
 
 export function DoctorCalendar() {
   const { token } = useAuth();
-  const [monthAnchor, setMonthAnchor] = useState(() => startOfMonth(new Date()));
+  const [monthAnchor, setMonthAnchor] = useState(() =>
+    startOfMonth(new Date()),
+  );
   const [calendarDays, setCalendarDays] = useState<CalendarDay[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
-  const [selectedDate, setSelectedDate] = useState<string>(() => toISODateLocal(new Date()));
+  const [selectedDate, setSelectedDate] = useState<string>(() =>
+    toISODateLocal(new Date()),
+  );
   const [err, setErr] = useState<string | null>(null);
 
   const today = useMemo(() => toISODateLocal(new Date()), []);
@@ -60,7 +65,10 @@ export function DoctorCalendar() {
     void load();
   }, [load]);
 
-  const dayMap = useMemo(() => new Map(calendarDays.map((d) => [d.date, d])), [calendarDays]);
+  const dayMap = useMemo(
+    () => new Map(calendarDays.map((d) => [d.date, d])),
+    [calendarDays],
+  );
 
   const patientName = useCallback(
     (id: number) => patients.find((p) => p.id === id)?.name ?? `Пациент #${id}`,
@@ -71,7 +79,10 @@ export function DoctorCalendar() {
     const list: Consultation[] = [];
     for (const d of calendarDays) {
       for (const c of d.consultations) {
-        if (c.next_visit_date && c.next_visit_date >= today) {
+        if (
+          c.next_visit_date &&
+          new Date(c.next_visit_date).getTime() >= Date.now()
+        ) {
           list.push(c);
         }
       }
@@ -94,7 +105,10 @@ export function DoctorCalendar() {
     cursor.setDate(cursor.getDate() - startWeekday);
     for (let i = 0; i < 42; i++) {
       const iso = toISODateLocal(cursor);
-      cells.push({ iso, inMonth: cursor.getMonth() === monthAnchor.getMonth() });
+      cells.push({
+        iso,
+        inMonth: cursor.getMonth() === monthAnchor.getMonth(),
+      });
       cursor.setDate(cursor.getDate() + 1);
     }
     return cells;
@@ -102,7 +116,10 @@ export function DoctorCalendar() {
 
   const selectedConsultations = dayMap.get(selectedDate)?.consultations ?? [];
 
-  const monthTitle = monthAnchor.toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
+  const monthTitle = monthAnchor.toLocaleDateString("ru-RU", {
+    month: "long",
+    year: "numeric",
+  });
 
   return (
     <div className="page-stack">
@@ -117,11 +134,17 @@ export function DoctorCalendar() {
           <ul className="upcoming-list">
             {upcoming.map((c) => (
               <li key={c.id} className="upcoming-list__item">
-                <div className="upcoming-list__date">{c.next_visit_date}</div>
+                <div className="upcoming-list__date">
+                  {formatDateTimeRu(c.next_visit_date)}
+                </div>
                 <div className="upcoming-list__body">
-                  <Link to={`/doctor/patients/${c.patient_id}`}>{patientName(c.patient_id)}</Link>
+                  <Link to={`/doctor/patients/${c.patient_id}`}>
+                    {patientName(c.patient_id)}
+                  </Link>
                   <div className="muted upcoming-list__sub">
-                    <Link to={`/doctor/consultations/${c.id}`}>консультация #{c.id}</Link>
+                    <Link to={`/doctor/consultations/${c.id}`}>
+                      консультация #{c.id}
+                    </Link>
                     {" · "}
                     приём: {new Date(c.visit_at).toLocaleDateString("ru-RU")}
                   </div>
@@ -135,11 +158,19 @@ export function DoctorCalendar() {
       <div className="calendar-layout">
         <div className="card card--elevated calendar-panel">
           <div className="calendar-toolbar">
-            <button type="button" className="btn secondary btn--small" onClick={() => setMonthAnchor((m) => addMonths(m, -1))}>
+            <button
+              type="button"
+              className="btn secondary btn--small"
+              onClick={() => setMonthAnchor((m) => addMonths(m, -1))}
+            >
               ←
             </button>
             <h2 className="calendar-toolbar__title">{monthTitle}</h2>
-            <button type="button" className="btn secondary btn--small" onClick={() => setMonthAnchor((m) => addMonths(m, 1))}>
+            <button
+              type="button"
+              className="btn secondary btn--small"
+              onClick={() => setMonthAnchor((m) => addMonths(m, 1))}
+            >
               →
             </button>
             <button
@@ -180,7 +211,9 @@ export function DoctorCalendar() {
                     .join(" ")}
                   onClick={() => setSelectedDate(iso)}
                 >
-                  <span className="day-cell__num">{parseISODateLocal(iso).getDate()}</span>
+                  <span className="day-cell__num">
+                    {parseISODateLocal(iso).getDate()}
+                  </span>
                   {has && <span className="day-cell__dot" aria-hidden />}
                 </button>
               );
@@ -198,25 +231,35 @@ export function DoctorCalendar() {
             })}
           </h2>
           {selectedConsultations.length === 0 ? (
-            <p className="muted">На этот день в календаре нет приёмов и запланированных повторов.</p>
+            <p className="muted">
+              На этот день в календаре нет приёмов и запланированных повторов.
+            </p>
           ) : (
             <ul className="day-detail-list">
               {selectedConsultations.map((c) => (
                 <li key={c.id} className="day-detail-list__item">
                   <div className="day-detail-list__row">
-                    <strong>{patientName(c.patient_id)}</strong>
-                    <Link to={`/doctor/consultations/${c.id}`}>Карточка</Link>
+                    <Link to={`/doctor/patients/${c.patient_id}`}>
+                      <strong>{patientName(c.patient_id)}</strong>
+                    </Link>
+                    <span>
+                      <Link to={`/doctor/patients/${c.patient_id}`}>
+                        Карточка
+                      </Link>
+                    </span>
                   </div>
                   <div className="muted">
                     Визит: {new Date(c.visit_at).toLocaleString("ru-RU")}
                     {c.next_visit_date && (
                       <>
                         {" · "}
-                        следующий: {c.next_visit_date}
+                        следующий: {formatDateTimeRu(c.next_visit_date)}
                       </>
                     )}
                   </div>
-                  {c.notes && <div className="day-detail-list__notes">{c.notes}</div>}
+                  {c.notes && (
+                    <div className="day-detail-list__notes">{c.notes}</div>
+                  )}
                 </li>
               ))}
             </ul>

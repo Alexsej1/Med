@@ -12,6 +12,8 @@ import { DoctorCalendar } from "./doctor/DoctorCalendar";
 import { DoctorHistory } from "./doctor/DoctorHistory";
 import { AdminLayout, RequireAdmin } from "./admin/AdminLayout";
 import { AdminConsultations } from "./admin/AdminConsultations";
+import { AdminDoctors } from "./admin/AdminDoctors";
+import { AdminPatients } from "./admin/AdminPatients";
 import "./styles.css";
 
 export default function App() {
@@ -26,15 +28,27 @@ export default function App() {
               <Route index element={<DoctorDashboard />} />
               <Route path="patients" element={<DoctorPatients />} />
               <Route path="patients/:id" element={<DoctorPatientDetail />} />
-              <Route path="patients/:id/consultation" element={<DoctorConsultation />} />
-              <Route path="consultations/:consultationId" element={<DoctorConsultationDetail />} />
+              <Route
+                path="patients/:id/consultation"
+                element={<DoctorConsultation />}
+              />
+              <Route
+                path="consultations/:consultationId"
+                element={<DoctorConsultationDetail />}
+              />
               <Route path="calendar" element={<DoctorCalendar />} />
               <Route path="history" element={<DoctorHistory />} />
             </Route>
           </Route>
           <Route element={<RequireAdmin />}>
             <Route path="/admin" element={<AdminLayout />}>
-              <Route index element={<AdminConsultations />} />
+              <Route
+                index
+                element={<Navigate to="/admin/patients" replace />}
+              />
+              <Route path="patients" element={<AdminPatients />} />
+              <Route path="doctors" element={<AdminDoctors />} />
+              <Route path="consultations" element={<AdminConsultations />} />
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

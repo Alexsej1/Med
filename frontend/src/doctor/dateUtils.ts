@@ -36,3 +36,17 @@ export function minDate(a: Date, b: Date): Date {
 export function maxDate(a: Date, b: Date): Date {
   return a.getTime() >= b.getTime() ? a : b;
 }
+
+/** Дата и время для следующего визита (ISO с бэкенда). */
+export function formatDateTimeRu(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString("ru-RU", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}

@@ -24,12 +24,29 @@ export function AdminLayout() {
           </div>
         </Link>
         <nav className="nav nav--workspace">
-          <NavLink to="/admin" end className={({ isActive }) => (isActive ? "active" : "")}>
+          <NavLink
+            to="/admin/patients"
+            className={({ isActive }) => (isActive ? "active" : "")}
+          >
+            Пациенты
+          </NavLink>
+          <NavLink
+            to="/admin/doctors"
+            className={({ isActive }) => (isActive ? "active" : "")}
+          >
+            Врачи
+          </NavLink>
+          <NavLink
+            to="/admin/consultations"
+            className={({ isActive }) => (isActive ? "active" : "")}
+          >
             Консультации
           </NavLink>
         </nav>
         <div className="topbar__user topbar__user--workspace">
-          <span title={user?.username}>{user?.full_name || user?.username}</span>
+          <span title={user?.username}>
+            {user?.full_name || user?.username}
+          </span>
           <button type="button" className="btn secondary" onClick={logout}>
             Выход
           </button>

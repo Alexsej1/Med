@@ -5,34 +5,80 @@ type Props = { compact?: boolean };
 
 export function BrandMark({ compact }: Props) {
   const gradId = `vmBrandGrad-${useId().replace(/:/g, "")}`;
+
   return (
-    <div className={`brand-mark ${compact ? "brand-mark--compact" : ""}`} aria-hidden>
-      <svg className="brand-mark__icon" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <div
+      className={`brand-mark ${compact ? "brand-mark--compact" : ""}`}
+      aria-hidden
+    >
+      <svg
+        className="brand-mark__icon"
+        viewBox="0 0 40 40"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
         <defs>
-          <linearGradient id={gradId} x1="6" y1="4" x2="36" y2="38" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#0d8a8d" />
-            <stop offset="1" stopColor="#0a4d5c" />
+          <linearGradient
+            id={gradId}
+            x1="0"
+            y1="0"
+            x2="40"
+            y2="40"
+            gradientUnits="userSpaceOnUse"
+          >
+            <stop stopColor="var(--lnd-blue)" />
+            <stop offset="1" stopColor="var(--lnd-blue)" stopOpacity="0.85" />
           </linearGradient>
         </defs>
-        <rect width="40" height="40" rx="11" fill={`url(#${gradId})`} />
-        <path
-          d="M20 10v20M12 20h16"
-          stroke="#fff"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-          opacity="0.95"
-        />
-        <path
-          d="M27 13.5c1.6 1.8 2.5 4 2.5 6.5s-0.9 4.7-2.5 6.5"
-          stroke="rgba(255,255,255,0.45)"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
+
+        {/* Фон */}
+        <rect width="40" height="40" rx="10" fill={`url(#${gradId})`} />
+
+        {/* Медицинский крест */}
+        <rect x="17" y="11" width="6" height="18" rx="2" fill="white">
+          <animate
+            attributeName="opacity"
+            values="0.85;1;0.85"
+            dur="2s"
+            repeatCount="indefinite"
+          />
+        </rect>
+        <rect x="11" y="17" width="18" height="6" rx="2" fill="white">
+          <animate
+            attributeName="opacity"
+            values="0.85;1;0.85"
+            dur="2s"
+            repeatCount="indefinite"
+          />
+        </rect>
+
+        {/* Пульсирующее кольцо */}
+        <circle
+          cx="20"
+          cy="20"
+          r="13"
+          fill="none"
+          stroke="white"
+          strokeWidth="2"
+        >
+          <animate
+            attributeName="r"
+            values="13;17;13"
+            dur="4.5s"
+            repeatCount="indefinite"
+          />
+          <animate
+            attributeName="opacity"
+            values="0.8;0;0.8"
+            dur="4.5s"
+            repeatCount="indefinite"
+          />
+        </circle>
       </svg>
+
       {!compact && (
         <div className="brand-mark__text">
           <span className="brand-mark__name">{BRAND_SHORT}</span>
-          <span className="brand-mark__sub">медицинский центр</span>
         </div>
       )}
     </div>

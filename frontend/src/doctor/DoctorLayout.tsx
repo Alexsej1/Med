@@ -20,7 +20,6 @@ export function DoctorLayout() {
           <BrandMark compact />
           <div className="topbar__brand-text">
             <span className="topbar__name">{BRAND_SHORT}</span>
-            <span className="topbar__role">Рабочее место врача</span>
           </div>
         </Link>
         <nav className="nav nav--workspace">
