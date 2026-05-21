@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
@@ -9,14 +9,9 @@ from app.database import get_db
 from app.deps import AdminUser
 from app.models import Consultation, Patient, User, UserRole
 from app.schemas import ConsultationOut
+from app.time_utils import normalize_visit_datetime, schedule_now_utc
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-
-
-def _to_naive_utc(dt: datetime) -> datetime:
-    if dt.tzinfo is None:
-        return dt
-    return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 class DoctorCreateIn(BaseModel):
@@ -95,10 +90,12 @@ def admin_create_consultation(
     p = db.query(Patient).filter(Patient.id == body.patient_id).first()
     if not p:
         raise HTTPException(status_code=404, detail="Пациент не найден")
-    visit = _to_naive_utc(body.visit_at) if body.visit_at else _to_naive_utc(datetime.now(timezone.utc))
-    next_visit = (
-        _to_naive_utc(body.next_visit_date) if body.next_visit_date is not None else None
+    visit = (
+        normalize_visit_datetime(body.visit_at)
+        if body.visit_at
+        else schedule_now_utc()
     )
+    next_visit = normalize_visit_datetime(body.next_visit_date)
     c = Consultation(
         patient_id=body.patient_id,
         doctor_id=body.doctor_id,

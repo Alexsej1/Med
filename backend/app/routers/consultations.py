@@ -14,6 +14,7 @@ from app.models import Consultation, Patient, User, UserRole
 from app.schemas import CalendarDay, ConsultationCreate, ConsultationFeedback, ConsultationOut
 from app.services.consultation_pdf import build_consultation_pdf
 from app.services.icd10_service import icd10_service
+from app.time_utils import normalize_visit_datetime, schedule_now_utc
 
 router = APIRouter(prefix="/consultations", tags=["consultations"])
 _logger = logging.getLogger(__name__)
@@ -58,10 +59,12 @@ def create_consultation(
     db: Session = Depends(get_db),
 ):
     _ensure_patient_access(db, user, body.patient_id)
-    visit = _to_naive_utc(body.visit_at) if body.visit_at else _to_naive_utc(datetime.now(timezone.utc))
-    next_visit = (
-        _to_naive_utc(body.next_visit_date) if body.next_visit_date is not None else None
+    visit = (
+        normalize_visit_datetime(body.visit_at)
+        if body.visit_at
+        else schedule_now_utc()
     )
+    next_visit = normalize_visit_datetime(body.next_visit_date)
     icd10_service.load()
     diagnoses_json = icd10_service.enrich_diagnoses_json(body.diagnoses)
     c = Consultation(

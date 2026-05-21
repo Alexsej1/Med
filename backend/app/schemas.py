@@ -111,6 +111,14 @@ class UpcomingVisitOut(BaseModel):
     next_visit_date: datetime
 
 
+class UpcomingNotificationOut(BaseModel):
+    consultation_id: int
+    patient_id: int
+    patient_name: str
+    next_visit_date: datetime
+    minutes_until: int
+
+
 class DoctorSummaryOut(BaseModel):
     patients_total: int
     consultations_total: int

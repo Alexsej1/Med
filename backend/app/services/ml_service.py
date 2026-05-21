@@ -3,6 +3,7 @@ from pathlib import Path
 
 import joblib
 import numpy as np
+import shap
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
@@ -12,7 +13,6 @@ from app.database import ml_artifacts_dir
 
 
 def _data_path() -> Path:
-    # app/services/ml_service.py -> backend/ml_data
     return Path(__file__).resolve().parents[2] / "ml_data" / "symptom_disease_samples.json"
 
 
@@ -28,6 +28,7 @@ class MLService:
         self._disease_names: list[str] = []
         self._label_encoder: LabelEncoder | None = None
         self._symptom_labels: dict[str, str] = {}
+        self._shap_explainer = None
 
     def load(self) -> None:
         model_path, meta_path = _artifacts()
@@ -44,6 +45,14 @@ class MLService:
         with open(meta_path, encoding="utf-8") as f:
             meta = json.load(f)
         self._symptom_labels = meta.get("symptom_labels", {})
+
+        # Создаём SHAP LinearExplainer
+        n_features = len(self._symptom_keys)
+        background = np.zeros((1, n_features))
+        self._shap_explainer = shap.LinearExplainer(
+            self._model,
+            shap.maskers.Independent(background),
+        )
 
     @property
     def symptom_keys(self) -> list[str]:
@@ -74,7 +83,6 @@ class MLService:
         return out[:limit]
 
     def symptom_labels_map(self) -> dict[str, str]:
-        """Ключ симптома → подпись (RU) для отображения в UI."""
         if self._model is None:
             self.load()
         out: dict[str, str] = {}
@@ -95,6 +103,8 @@ class MLService:
     ) -> tuple[list[dict], bool, list[dict], float]:
         if self._model is None:
             self.load()
+
+        # 1. Собираем вектор признаков
         present: set[str] = set(symptom_keys)
         if clarifications:
             for item in clarifications:
@@ -107,14 +117,24 @@ class MLService:
                     present.discard(key)
 
         X = self._vector(present)
+
+        # 2. Вероятности классов
         proba = self._model.predict_proba(X)[0]
         top_idx = np.argsort(-proba)[:3]
         max_p = float(proba[int(top_idx[0])])
 
+        # 3. SHAP-значения для данного вектора
+        shap_values_all = self._shap_explainer.shap_values(X)
+
+        # Новый SHAP (>=0.40): ndarray формы (n_samples, n_features, n_classes)
+        # Старый SHAP: список длиной n_classes, каждый элемент (n_samples, n_features)
+        shap_is_3d = isinstance(shap_values_all, np.ndarray) and shap_values_all.ndim == 3
+
+        # 4. Формируем топ-3 предсказания с SHAP-вкладами
         classes = np.asarray(self._model.classes_)
-        predictions: list[dict] = []
-        coef = self._model.coef_
         le = self._label_encoder
+        predictions: list[dict] = []
+
         for idx in top_idx:
             ci = int(idx)
             if le is not None:
@@ -122,22 +142,27 @@ class MLService:
             else:
                 disease = str(classes[ci])
             p = float(proba[ci])
+
+            # Извлекаем вектор SHAP для класса ci
+            if shap_is_3d:
+                sv = shap_values_all[0, :, ci]   # (n_features,)
+            else:
+                sv = shap_values_all[ci][0]      # (n_features,)
+
             influences: list[dict] = []
-            if coef is not None and ci < coef.shape[0]:
-                row = coef[ci]
-                for j, sk in enumerate(self._symptom_keys):
-                    if sk not in present:
-                        continue
-                    w = float(row[j])
-                    influences.append(
-                        {
-                            "symptom_key": sk,
-                            "symptom_label": self._symptom_labels.get(sk, sk),
-                            "weight": round(w, 4),
-                        }
-                    )
-                influences.sort(key=lambda x: abs(x["weight"]), reverse=True)
-                influences = influences[:8]
+            for j, sk in enumerate(self._symptom_keys):
+                if sk not in present:
+                    continue
+                w = float(sv[j])
+                influences.append(
+                    {
+                        "symptom_key": sk,
+                        "symptom_label": self._symptom_labels.get(sk, sk),
+                        "weight": round(w, 4),
+                    }
+                )
+            influences.sort(key=lambda x: abs(x["weight"]), reverse=True)
+            influences = influences[:8]
             predictions.append(
                 {
                     "disease": disease,
@@ -146,6 +171,7 @@ class MLService:
                 }
             )
 
+        # 5. Уточняющие вопросы
         needs = max_p < settings.diagnosis_confidence_threshold
         questions: list[dict] = []
         if needs:
@@ -210,11 +236,7 @@ def train_and_save() -> None:
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
     )
-    model = LogisticRegression(
-        max_iter=2000,
-        solver="lbfgs",
-        C=1.0,
-    )
+    model = LogisticRegression(max_iter=2000, solver="lbfgs", C=1.0)
     model.fit(X_train, y_train)
 
     disease_names = [str(c) for c in model.classes_]
