@@ -1,8 +1,16 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import { api } from "../api";
 import type { DiseaseSuggestion, DiagnoseResponse, Patient } from "../types";
+import { datetimeLocalToApiIso } from "./dateUtils";
 
 type Clar = { symptom_key: string; present: boolean };
 
@@ -12,9 +20,12 @@ export function DoctorConsultation() {
   const { token } = useAuth();
   const [patient, setPatient] = useState<Patient | null>(null);
   const [symptomInput, setSymptomInput] = useState("");
+  const [symptomFocused, setSymptomFocused] = useState(false);
   const [suggestions, setSuggestions] = useState<
     { key: string; label: string }[]
   >([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const symptomBlurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [labels, setLabels] = useState<Record<string, string>>({});
   const [diag, setDiag] = useState<DiagnoseResponse | null>(null);
@@ -41,17 +52,34 @@ export function DoctorConsultation() {
   }, [token, pid]);
 
   const fetchSuggest = useCallback(async () => {
-    if (!token) return;
-    const s = await api.symptoms(token, symptomInput);
-    setSuggestions(s);
-  }, [token, symptomInput]);
+    if (!token || !symptomFocused) return;
+    setSuggestionsLoading(true);
+    try {
+      const s = await api.symptoms(token, symptomInput.trim());
+      setSuggestions(s.filter((item) => !selected.includes(item.key)));
+    } catch {
+      setSuggestions([]);
+    } finally {
+      setSuggestionsLoading(false);
+    }
+  }, [token, symptomInput, symptomFocused, selected]);
 
   useEffect(() => {
+    if (!symptomFocused) {
+      setSuggestions([]);
+      return;
+    }
     const t = setTimeout(() => {
       void fetchSuggest();
     }, 200);
     return () => clearTimeout(t);
-  }, [fetchSuggest]);
+  }, [fetchSuggest, symptomFocused]);
+
+  useEffect(() => {
+    return () => {
+      if (symptomBlurTimer.current) clearTimeout(symptomBlurTimer.current);
+    };
+  }, []);
 
   const fetchDiseaseSuggest = useCallback(async () => {
     if (!token || feedback !== false) return;
@@ -70,11 +98,25 @@ export function DoctorConsultation() {
     return () => clearTimeout(t);
   }, [fetchDiseaseSuggest, feedback]);
 
+  function openSymptomField() {
+    if (symptomBlurTimer.current) {
+      clearTimeout(symptomBlurTimer.current);
+      symptomBlurTimer.current = null;
+    }
+    setSymptomFocused(true);
+  }
+
+  function closeSymptomField() {
+    symptomBlurTimer.current = setTimeout(() => {
+      setSymptomFocused(false);
+      setSuggestions([]);
+    }, 180);
+  }
+
   function addSymptom(key: string, label: string) {
     setLabels((m) => ({ ...m, [key]: label }));
     setSelected((s) => (s.includes(key) ? s : [...s, key]));
     setSymptomInput("");
-    setSuggestions([]);
   }
 
   function removeSymptom(key: string) {
@@ -161,7 +203,7 @@ export function DoctorConsultation() {
       }
       const c = await api.createConsultation(token, {
         patient_id: pid,
-        next_visit_date: nextVisit || null,
+        next_visit_date: datetimeLocalToApiIso(nextVisit),
         notes: notes || null,
         symptom_keys: selected,
         clarifications: clarificationsPayload.length
@@ -228,10 +270,13 @@ export function DoctorConsultation() {
         <div className="card card--elevated cns-card">
           <h2 className="cns-card__title">Симптомы</h2>
           <p className="cns-card__sub">
-            Начните вводить и выбирайте из предложенных вариантов
+            Нажмите на поле ниже — откроется список; можно выбрать из него или
+            начать вводить для поиска
           </p>
 
-          <div className="cns-search-wrap">
+          <div
+            className={`cns-search-wrap${symptomFocused ? " cns-search-wrap--open" : ""}`}
+          >
             <svg
               className="pts-search-icon"
               width="16"
@@ -257,10 +302,18 @@ export function DoctorConsultation() {
               className="pts-search-input"
               value={symptomInput}
               onChange={(e) => setSymptomInput(e.target.value)}
-              placeholder="Введите симптом, например: кашель, температура…"
+              onFocus={openSymptomField}
+              onBlur={closeSymptomField}
+              placeholder="Кликните и выберите симптом или введите для поиска…"
               autoComplete="off"
+              autoFocus={false}
+              aria-expanded={symptomFocused && suggestions.length > 0}
+              aria-haspopup="listbox"
             />
-            {suggestions.length > 0 && (
+            {symptomFocused && suggestionsLoading && (
+              <span className="pts-search-spinner" aria-hidden="true" />
+            )}
+            {symptomFocused && !suggestionsLoading && suggestions.length > 0 && (
               <ul className="cns-suggest" role="listbox">
                 {suggestions.map((s) => (
                   <li
@@ -268,6 +321,7 @@ export function DoctorConsultation() {
                     role="option"
                     tabIndex={0}
                     className="cns-suggest__item"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => addSymptom(s.key, s.label)}
                     onKeyDown={(e) =>
                       e.key === "Enter" && addSymptom(s.key, s.label)
@@ -278,6 +332,12 @@ export function DoctorConsultation() {
                 ))}
               </ul>
             )}
+            {symptomFocused &&
+              !suggestionsLoading &&
+              suggestions.length === 0 &&
+              symptomInput.trim() && (
+                <p className="cns-suggest-empty">Ничего не найдено</p>
+              )}
           </div>
 
           {selected.length > 0 && (

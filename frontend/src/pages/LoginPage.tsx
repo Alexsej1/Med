@@ -13,7 +13,9 @@ export function LoginPage() {
   const [busy, setBusy] = useState(false);
 
   if (!loading && user) {
-    return <Navigate to={user.role === "admin" ? "/admin" : "/doctor"} replace />;
+    return (
+      <Navigate to={user.role === "admin" ? "/admin" : "/doctor"} replace />
+    );
   }
 
   async function onSubmit(e: FormEvent) {
@@ -41,7 +43,11 @@ export function LoginPage() {
         <form onSubmit={onSubmit}>
           <div className="field">
             <label className="field__label">Логин</label>
-            <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
+            <input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoComplete="username"
+            />
           </div>
           <div className="field">
             <label className="field__label">Пароль</label>
@@ -54,7 +60,12 @@ export function LoginPage() {
           </div>
           {err && <p className="error">{err}</p>}
           <div className="card__actions" style={{ marginTop: 8 }}>
-            <button className="btn btn--large" type="submit" disabled={busy || loading} style={{ width: "100%" }}>
+            <button
+              className="btn btn--large"
+              type="submit"
+              disabled={busy || loading}
+              style={{ width: "100%" }}
+            >
               Войти
             </button>
           </div>
@@ -62,7 +73,6 @@ export function LoginPage() {
         <p className="auth-back">
           <Link to="/">← На главную</Link>
         </p>
-        <p className="auth-demo">Демо-доступ: doctor / doctor123 · admin / admin123</p>
       </div>
     </div>
   );

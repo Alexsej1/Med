@@ -87,3 +87,11 @@ export type DoctorSummary = {
     next_visit_date: string;
   }[];
 };
+
+export type UpcomingNotification = {
+  consultation_id: number;
+  patient_id: number;
+  patient_name: string;
+  next_visit_date: string;
+  minutes_until: number;
+};

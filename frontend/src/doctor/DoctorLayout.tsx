@@ -3,6 +3,8 @@ import { BrandMark } from "../components/BrandMark";
 import { BRAND_SHORT } from "../brand";
 import { useAuth } from "../AuthContext";
 import { SymptomLabelsProvider } from "../SymptomLabelsContext";
+import { VisitNotificationToasts } from "./VisitNotificationToasts";
+import { useUpcomingVisitNotifications } from "./useUpcomingVisitNotifications";
 export function RequireDoctor() {
   const { user, loading, token } = useAuth();
   if (loading) return <p className="muted page-loading">Загрузка…</p>;
@@ -12,7 +14,8 @@ export function RequireDoctor() {
 }
 
 export function DoctorLayout() {
-  const { user, logout } = useAuth();
+  const { user, logout, token } = useAuth();
+  const { toasts, dismissToast } = useUpcomingVisitNotifications(token);
   return (
     <div className="app-shell app-shell--workspace">
       <header className="topbar topbar--workspace">
@@ -23,21 +26,36 @@ export function DoctorLayout() {
           </div>
         </Link>
         <nav className="nav nav--workspace">
-          <NavLink to="/doctor" end className={({ isActive }) => (isActive ? "active" : "")}>
+          <NavLink
+            to="/doctor"
+            end
+            className={({ isActive }) => (isActive ? "active" : "")}
+          >
             Обзор
           </NavLink>
-          <NavLink to="/doctor/patients" className={({ isActive }) => (isActive ? "active" : "")}>
+          <NavLink
+            to="/doctor/patients"
+            className={({ isActive }) => (isActive ? "active" : "")}
+          >
             Пациенты
           </NavLink>
-          <NavLink to="/doctor/calendar" className={({ isActive }) => (isActive ? "active" : "")}>
+          <NavLink
+            to="/doctor/calendar"
+            className={({ isActive }) => (isActive ? "active" : "")}
+          >
             Календарь
           </NavLink>
-          <NavLink to="/doctor/history" className={({ isActive }) => (isActive ? "active" : "")}>
+          <NavLink
+            to="/doctor/history"
+            className={({ isActive }) => (isActive ? "active" : "")}
+          >
             История
           </NavLink>
         </nav>
         <div className="topbar__user topbar__user--workspace">
-          <span title={user?.username}>{user?.full_name || user?.username}</span>
+          <span title={user?.username}>
+            {user?.full_name || user?.username}
+          </span>
           <button type="button" className="btn secondary" onClick={logout}>
             Выход
           </button>
@@ -48,6 +66,7 @@ export function DoctorLayout() {
           <Outlet />
         </SymptomLabelsProvider>
       </main>
+      <VisitNotificationToasts toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

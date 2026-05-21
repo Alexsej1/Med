@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useAuth } from "../AuthContext";
 import { api } from "../api";
 import type { Consultation, Patient } from "../types";
+import { datetimeLocalToApiIso } from "../doctor/dateUtils";
 
 function doctorDisplayName(
   doctorId: number,
@@ -55,7 +56,7 @@ export function AdminConsultations() {
         patient_id: Number(patientId),
         doctor_id: Number(doctorId),
         notes: notes || null,
-        next_visit_date: nextVisit || null,
+        next_visit_date: datetimeLocalToApiIso(nextVisit),
         symptom_keys: [],
         diagnoses: { source: "admin_manual" },
         diagnosis_feedback: null,

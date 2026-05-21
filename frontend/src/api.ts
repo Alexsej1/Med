@@ -9,6 +9,7 @@ import type {
   DiseaseSuggestion,
   DoctorSummary,
   Patient,
+  UpcomingNotification,
   User,
 } from "./types";
 
@@ -155,6 +156,11 @@ export const api = {
   doctorSummary(token: string) {
     return request<DoctorSummary>("/api/doctor/summary", { token });
   },
+  upcomingNotifications(token: string) {
+    return request<UpcomingNotification[]>("/api/notifications/upcoming", {
+      token,
+    });
+  },
   symptomLabels(token: string) {
     return request<Record<string, string>>("/api/symptoms/labels", { token });
   },
@@ -188,7 +194,12 @@ export const api = {
   },
   adminDoctors(token: string) {
     return request<
-      { id: number; username: string; full_name: string | null; patients_count: number }[]
+      {
+        id: number;
+        username: string;
+        full_name: string | null;
+        patients_count: number;
+      }[]
     >("/api/admin/doctors", { token });
   },
   adminCreateDoctor(
